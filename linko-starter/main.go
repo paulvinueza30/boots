@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -24,7 +25,12 @@ func main() {
 }
 
 func run(ctx context.Context, cancel context.CancelFunc, httpPort int, dataDir string) int {
-	logger := initLogger()
+	logPath := os.Getenv("LINKO_LOG_FILE")
+	logger, err := initLogger(logPath)
+	if err != nil {
+		fmt.Printf("failed to init logger err:%v", err)
+		return 1
+	}
 	st, err := store.New(dataDir, logger)
 	if err != nil {
 		logger.Printf("failed to create store: %v\n", err)

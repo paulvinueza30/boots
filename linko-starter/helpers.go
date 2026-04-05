@@ -1,21 +1,23 @@
 package main
 
 import (
+	"bufio"
+	"fmt"
 	"io"
 	"log"
 	"os"
 )
 
-func initLogger() *log.Logger {
-	logPath, exists := os.LookupEnv("LINKO_LOG_FILE")
-	if !exists {
-		return log.New(os.Stderr, "", log.LstdFlags)
+func initLogger(logPath string) (*log.Logger, error) {
+	if logPath == "" {
+		return log.New(os.Stderr, "", log.LstdFlags), nil
 	}
 	logFile, err := os.OpenFile(logPath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0o644)
 	if err != nil {
-		log.Fatalf("failed to open log file: %v", err)
+		return nil, fmt.Errorf("failed to open log file: %v", err)
 	}
-	mw := io.MultiWriter(logFile, os.Stderr)
+	bufferedFile := bufio.NewWriterSize(logFile, 8192)
+	mw := io.MultiWriter(bufferedFile, os.Stderr)
 	logger := log.New(mw, "", log.LstdFlags)
-	return logger
+	return logger, nil
 }
