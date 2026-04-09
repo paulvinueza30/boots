@@ -4,18 +4,18 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 )
 
 type closeFunc func() error
 
-func initLogger(logPath string) (*log.Logger, closeFunc, error) {
+func initLogger(logPath string) (*slog.Logger, closeFunc, error) {
 	if logPath == "" {
 		closeFn := func() error {
 			return nil
 		}
-		return log.New(os.Stderr, "", log.LstdFlags), closeFn, nil
+		return slog.New(slog.NewTextHandler(os.Stderr, nil)), closeFn, nil
 	}
 	logFile, err := os.OpenFile(logPath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0o644)
 	if err != nil {
@@ -23,7 +23,7 @@ func initLogger(logPath string) (*log.Logger, closeFunc, error) {
 	}
 	bufferedFile := bufio.NewWriterSize(logFile, 8192)
 	mw := io.MultiWriter(bufferedFile, os.Stderr)
-	logger := log.New(mw, "", log.LstdFlags)
+	logger := slog.New(slog.NewTextHandler(mw, nil))
 
 	closeFn := func() error {
 		err := bufferedFile.Flush()
