@@ -11,7 +11,8 @@ type closeFunc func() error
 
 func initLogger(logPath string) (*slog.Logger, closeFunc, error) {
 	debugHandler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-		Level: slog.LevelDebug,
+		Level:       slog.LevelDebug,
+		ReplaceAttr: replaceAttr,
 	})
 	if logPath == "" {
 		closeFn := func() error {
@@ -25,7 +26,8 @@ func initLogger(logPath string) (*slog.Logger, closeFunc, error) {
 	}
 	bufferedFile := bufio.NewWriterSize(logFile, 8192)
 	infoHandler := slog.NewJSONHandler(bufferedFile, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
+		Level:       slog.LevelInfo,
+		ReplaceAttr: replaceAttr,
 	})
 	multiHandler := slog.NewMultiHandler(debugHandler, infoHandler)
 	logger := slog.New(multiHandler)
@@ -48,4 +50,15 @@ func closeLogger(closeFn closeFunc) {
 	if err := closeFn(); err != nil {
 		fmt.Printf("could not close logger err: %v", err)
 	}
+}
+
+func replaceAttr(groups []string, a slog.Attr) slog.Attr {
+	if a.Key == "error" {
+		err, ok := a.Value.Any().(error)
+		if !ok {
+			return a
+		}
+		return slog.String("error", fmt.Sprintf("%+v", err))
+	}
+	return a
 }
