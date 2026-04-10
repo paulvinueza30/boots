@@ -24,7 +24,7 @@ func initLogger(logPath string) (*slog.Logger, closeFunc, error) {
 		return nil, nil, fmt.Errorf("failed to open log file: %v", err)
 	}
 	bufferedFile := bufio.NewWriterSize(logFile, 8192)
-	infoHandler := slog.NewTextHandler(bufferedFile, &slog.HandlerOptions{
+	infoHandler := slog.NewJSONHandler(bufferedFile, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 	})
 	multiHandler := slog.NewMultiHandler(debugHandler, infoHandler)
