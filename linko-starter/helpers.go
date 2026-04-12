@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 
+	"boot.dev/linko/internal/build"
 	"boot.dev/linko/internal/linkoerr"
 	pkgerr "github.com/pkg/errors"
 )
@@ -45,7 +46,7 @@ func initLogger(logPath string) (*slog.Logger, closeFunc, error) {
 	})
 	multiHandler := slog.NewMultiHandler(debugHandler, infoHandler)
 	logger := slog.New(multiHandler)
-
+	logger = logger.With(slog.String("git_sha", build.GitSHA), slog.String("build_time", build.BuildTime))
 	closeFn := func() error {
 		err := bufferedFile.Flush()
 		if err != nil {
