@@ -14,6 +14,8 @@ import (
 
 	"boot.dev/linko/internal/store"
 	"golang.org/x/crypto/bcrypt"
+
+	pkgerr "github.com/pkg/errors"
 )
 
 const shortURLLen = len("http://localhost:8080/") + 6
@@ -38,26 +40,26 @@ func (s *server) handlerLogin(w http.ResponseWriter, r *http.Request) {
 func (s *server) handlerShortenLink(w http.ResponseWriter, r *http.Request) {
 	user, ok := r.Context().Value(UserContextKey).(string)
 	if !ok || user == "" {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		httpError(r.Context(), w, http.StatusUnauthorized, pkgerr.New("unauthorized"))
 		return
 	}
 	longURL := r.FormValue("url")
 	if longURL == "" {
-		http.Error(w, "missing url parameter", http.StatusBadRequest)
+		httpError(r.Context(), w, http.StatusBadRequest, pkgerr.New("missing url parameter"))
 		return
 	}
 	u, err := url.Parse(longURL)
 	if err != nil || u.Scheme == "" || u.Host == "" {
-		http.Error(w, "invalid URL: must include scheme (http/https) and host", http.StatusBadRequest)
+		httpError(r.Context(), w, http.StatusBadRequest, pkgerr.New("invalid URL: must include scheme (http/https) and host"))
 		return
 	}
 	if err := checkDestination(longURL); err != nil {
-		http.Error(w, fmt.Sprintf("invalid target URL: %v", err), http.StatusBadRequest)
+		httpError(r.Context(), w, http.StatusBadRequest, pkgerr.Wrap(err, "invalid target URL"))
 		return
 	}
 	shortCode, err := s.store.Create(r.Context(), longURL)
 	if err != nil {
-		http.Error(w, "failed to shorten URL", http.StatusInternalServerError)
+		httpError(r.Context(), w, http.StatusInternalServerError, pkgerr.Wrap(err, "failed to shorten URL"))
 		return
 	}
 	s.logger.Info("Successfully generated short code", slog.String("short_code", shortCode), slog.String("url", longURL))
@@ -70,16 +72,16 @@ func (s *server) handlerRedirect(w http.ResponseWriter, r *http.Request) {
 	longURL, err := s.store.Lookup(r.Context(), r.PathValue("shortCode"))
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			http.Error(w, "not found", http.StatusNotFound)
+			httpError(r.Context(), w, http.StatusNotFound, errors.New("not found"))
 		} else {
 			s.logger.Error("failed to lookup URL", slog.Any("error", err))
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			httpError(r.Context(), w, http.StatusInternalServerError, fmt.Errorf("internal server error %v", err))
 		}
 		return
 	}
 	_, _ = bcrypt.GenerateFromPassword([]byte(longURL), bcrypt.DefaultCost)
 	if err := checkDestination(longURL); err != nil {
-		http.Error(w, "destination unavailable", http.StatusBadGateway)
+		httpError(r.Context(), w, http.StatusBadGateway, fmt.Errorf("destination unavailable %v", err))
 		return
 	}
 
@@ -94,7 +96,7 @@ func (s *server) handlerListURLs(w http.ResponseWriter, r *http.Request) {
 	codes, err := s.store.List(r.Context())
 	if err != nil {
 		s.logger.Error("failed to list URLs", slog.Any("error", err))
-		http.Error(w, "failed to list URLs", http.StatusInternalServerError)
+		httpError(r.Context(), w, http.StatusInternalServerError, errors.New("failed to list URLs"))
 		return
 	}
 

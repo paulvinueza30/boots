@@ -77,23 +77,32 @@ func replaceAttr(groups []string, a slog.Attr) slog.Attr {
 		if !ok {
 			return a
 		}
-		if multiError, ok := errors.AsType[multiError](err); ok {
-			errAttrs := errorAttr(multiError)
+		var me multiError
+		if errors.As(err, &me) {
+			errAttrs := errorAttr(me)
 			return slog.GroupAttrs("errors", errAttrs...)
 		}
-		attrs := linkoerr.Attrs(err)
-		if len(attrs) > 0 {
-			return slog.GroupAttrs("error", attrs...)
-		}
+		attrs := errorAttrs(err)
+		return slog.GroupAttrs("error", attrs...)
 	}
 	return a
+}
+
+func errorAttrs(err error) []slog.Attr {
+	var attrs []slog.Attr
+	attrs = append(attrs, slog.String("message", err.Error()))
+	if st, ok := err.(stackTracer); ok {
+		attrs = append(attrs, slog.String("stack_trace", fmt.Sprintf("%+v", st.StackTrace())))
+	}
+	attrs = append(attrs, linkoerr.Attrs(err)...)
+	return attrs
 }
 
 func errorAttr(me multiError) []slog.Attr {
 	errs := me.Unwrap()
 	var errAttrs []slog.Attr
 	for i, err := range errs {
-		attrs := linkoerr.Attrs(err)
+		attrs := errorAttrs(err)
 		errAttrs = append(errAttrs, slog.GroupAttrs(fmt.Sprintf("error_%d", i+1), attrs...))
 	}
 	return errAttrs
