@@ -1,11 +1,18 @@
 package main
 
 import (
+	"context"
 	"io"
 	"log/slog"
 	"net/http"
 	"time"
 )
+
+const logContextKey contextKey = "log_context"
+
+type LogContext struct {
+	Username string
+}
 
 type spyReadCloser struct {
 	io.ReadCloser
@@ -45,9 +52,27 @@ func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 			spyReader := &spyReadCloser{ReadCloser: r.Body}
 			r.Body = spyReader
 			spyWriter := &spyResponseWriter{ResponseWriter: w}
+
+			logContext := &LogContext{}
+			ctx := context.WithValue(r.Context(), logContextKey, logContext)
+			r = r.WithContext(ctx)
+
 			next.ServeHTTP(spyWriter, r)
-			logger.Info("Served request",
-				slog.String("method", r.Method), slog.String("path", r.URL.Path), slog.String("client_ip", r.RemoteAddr), slog.Duration("duration", time.Since(start)), slog.Int("request_body_bytes", spyReader.bytesRead), slog.Int("response_status", spyWriter.statusCode), slog.Int("response_body_bytes", spyWriter.bytesWritten))
+			attrs := []any{
+				slog.String("method", r.Method),
+				slog.String("path", r.URL.Path),
+				slog.String("client_ip", r.RemoteAddr),
+				slog.Duration("duration", time.Since(start)),
+				slog.Int("request_body_bytes", spyReader.bytesRead),
+				slog.Int("response_status", spyWriter.statusCode),
+				slog.Int("response_body_bytes", spyWriter.bytesWritten),
+			}
+			// log context specifc attrs
+			username := logContext.Username
+			if username != "" {
+				attrs = append(attrs, slog.String("user", username))
+			}
+			logger.Info("Served request", attrs...)
 		})
 	}
 }
