@@ -46,7 +46,11 @@ func initLogger(logPath string) (*slog.Logger, closeFunc, error) {
 	})
 	multiHandler := slog.NewMultiHandler(debugHandler, infoHandler)
 	logger := slog.New(multiHandler)
-	logger = logger.With(slog.String("git_sha", build.GitSHA), slog.String("build_time", build.BuildTime))
+	hostname, err := os.Hostname()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get hostname: %v", err)
+	}
+	logger = logger.With(slog.String("git_sha", build.GitSHA), slog.String("build_time", build.BuildTime), slog.String("env", os.Getenv("ENV")), slog.String("hostname", hostname))
 	closeFn := func() error {
 		err := bufferedFile.Flush()
 		if err != nil {
