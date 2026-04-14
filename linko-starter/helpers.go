@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -9,7 +8,10 @@ import (
 
 	"boot.dev/linko/internal/build"
 	"boot.dev/linko/internal/linkoerr"
+	"github.com/lmittmann/tint"
+	"github.com/mattn/go-isatty"
 	pkgerr "github.com/pkg/errors"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 type closeFunc func() error
@@ -25,9 +27,14 @@ type multiError interface {
 }
 
 func initLogger(logPath string) (*slog.Logger, closeFunc, error) {
-	debugHandler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+	var noColor bool
+	if isatty.IsCygwinTerminal(os.Stderr.Fd()) || isatty.IsTerminal(os.Stderr.Fd()) {
+		noColor = true
+	}
+	debugHandler := tint.NewHandler(os.Stderr, &tint.Options{
 		Level:       slog.LevelDebug,
 		ReplaceAttr: replaceAttr,
+		NoColor:     noColor,
 	})
 	if logPath == "" {
 		closeFn := func() error {
@@ -39,8 +46,15 @@ func initLogger(logPath string) (*slog.Logger, closeFunc, error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to open log file: %v", err)
 	}
-	bufferedFile := bufio.NewWriterSize(logFile, 8192)
-	infoHandler := slog.NewJSONHandler(bufferedFile, &slog.HandlerOptions{
+	lumberjackLogger := &lumberjack.Logger{
+		Filename:   logFile.Name(),
+		MaxSize:    1,
+		MaxAge:     28,
+		MaxBackups: 10,
+		LocalTime:  false,
+		Compress:   true,
+	}
+	infoHandler := slog.NewJSONHandler(lumberjackLogger, &slog.HandlerOptions{
 		Level:       slog.LevelInfo,
 		ReplaceAttr: replaceAttr,
 	})
@@ -52,13 +66,9 @@ func initLogger(logPath string) (*slog.Logger, closeFunc, error) {
 	}
 	logger = logger.With(slog.String("git_sha", build.GitSHA), slog.String("build_time", build.BuildTime), slog.String("env", os.Getenv("ENV")), slog.String("hostname", hostname))
 	closeFn := func() error {
-		err := bufferedFile.Flush()
+		err := lumberjackLogger.Close()
 		if err != nil {
-			return fmt.Errorf("failed to flush buffer err: %v", err)
-		}
-		err = logFile.Close()
-		if err != nil {
-			return fmt.Errorf("failed to close log file err: %v", err)
+			return fmt.Errorf("failed to close logger %v", err)
 		}
 		return nil
 	}
