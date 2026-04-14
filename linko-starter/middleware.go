@@ -3,10 +3,15 @@ package main
 import (
 	"context"
 	"crypto/rand"
+	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
+	"strings"
 	"time"
+
+	"boot.dev/linko/internal/linkoerr"
 )
 
 const (
@@ -80,10 +85,16 @@ func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 
 			next.ServeHTTP(spyWriter, r)
 			reqID := r.Context().Value("request_id").(string)
+			clientIP := r.RemoteAddr
+			if redactedIP, err := redactIP(r.RemoteAddr); err == nil && redactedIP != nil {
+				clientIP = *redactedIP
+			} else if err != nil {
+				logContext.Error = linkoerr.WithAttrs(err, slog.String("http error", err.Error()))
+			}
 			attrs := []any{
 				slog.String("method", r.Method),
 				slog.String("path", r.URL.Path),
-				slog.String("client_ip", r.RemoteAddr),
+				slog.String("client_ip", clientIP),
 				slog.Duration("duration", time.Since(start)),
 				slog.String("request_id", reqID),
 				slog.Int("request_body_bytes", spyReader.bytesRead),
@@ -117,4 +128,21 @@ func requestID() func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+func redactIP(ip string) (*string, error) {
+	host, _, err := net.SplitHostPort(ip)
+	if err != nil {
+		return nil, fmt.Errorf("could not split ip %v", err)
+	}
+	parsed := net.ParseIP(host)
+	if parsed == nil {
+		return nil, fmt.Errorf("invalid IP: %s", host)
+	}
+	redacted := parsed.Mask(net.IPv4Mask(255, 255, 255, 0)).String()
+	if parsed.To4() != nil {
+		lastOctet := net.ParseIP(host).To4()[3]
+		redacted += "." + strings.Repeat("x", int(lastOctet))
+	}
+	return &redacted, nil
 }

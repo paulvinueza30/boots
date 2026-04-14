@@ -4,7 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
+	"slices"
+	"strings"
 
 	"boot.dev/linko/internal/build"
 	"boot.dev/linko/internal/linkoerr"
@@ -94,6 +97,18 @@ func replaceAttr(groups []string, a slog.Attr) slog.Attr {
 		}
 		attrs := errorAttrs(err)
 		return slog.GroupAttrs("error", attrs...)
+	}
+	sensitiveKeys := []string{"user", "password", "key", "apikey", "secret", "pin", "creditcardno"}
+	if slices.Contains(sensitiveKeys, a.Key) {
+		return slog.String(a.Key, "[REDACTED]")
+	}
+	url, err := url.Parse(a.Value.String())
+	if err == nil {
+		pass, ok := url.User.Password()
+		if ok {
+			redactedURL := strings.ReplaceAll(url.String(), pass, "REDACTED")
+			a.Value = slog.StringValue(redactedURL)
+		}
 	}
 	return a
 }
