@@ -19,11 +19,20 @@ type LogContext struct {
 	Error    error
 }
 
+func statusToMessage(status int, err error) string {
+	switch status {
+	case 401, 403, 500:
+		return http.StatusText(status)
+	default:
+		return err.Error()
+	}
+}
+
 func httpError(ctx context.Context, w http.ResponseWriter, status int, err error) {
 	if logCtx, ok := ctx.Value(logContextKey).(*LogContext); ok {
 		logCtx.Error = err
 	}
-	http.Error(w, err.Error(), status)
+	http.Error(w, statusToMessage(status, err), status)
 }
 
 type spyReadCloser struct {
