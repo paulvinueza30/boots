@@ -20,12 +20,19 @@ type server struct {
 	logger     *slog.Logger
 }
 
+func middlewareChain(h http.Handler, m ...func(http.Handler) http.Handler) http.Handler {
+	for i := len(m) - 1; i >= 0; i-- {
+		h = m[i](h)
+	}
+	return h
+}
+
 func newServer(store store.Store, port int, cancel context.CancelFunc, logger *slog.Logger) *server {
 	mux := http.NewServeMux()
 
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", port),
-		Handler: requestID()(requestLogger(logger)(mux)),
+		Handler: middlewareChain(mux, requestID(), requestLogger(logger), metricsMiddleware),
 	}
 
 	s := &server{
