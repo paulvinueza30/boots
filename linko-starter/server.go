@@ -7,10 +7,13 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/http/pprof"
 	"os"
 
 	"boot.dev/linko/internal/store"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	_ "go.opentelemetry.io/otel/trace"
 )
 
 type server struct {
@@ -24,12 +27,13 @@ func middlewareChain(h http.Handler, m ...func(http.Handler) http.Handler) http.
 	for i := len(m) - 1; i >= 0; i-- {
 		h = m[i](h)
 	}
+	// tracing
+	h = otelhttp.NewHandler(h, "http.server")
 	return h
 }
 
 func newServer(store store.Store, port int, cancel context.CancelFunc, logger *slog.Logger) *server {
 	mux := http.NewServeMux()
-
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", port),
 		Handler: middlewareChain(mux, requestID(), requestLogger(logger), metricsMiddleware),
@@ -48,9 +52,11 @@ func newServer(store store.Store, port int, cancel context.CancelFunc, logger *s
 	mux.Handle("GET /api/stats", s.authMiddleware(http.HandlerFunc(s.handlerStats)))
 	mux.Handle("GET /api/urls", s.authMiddleware(http.HandlerFunc(s.handlerListURLs)))
 	mux.HandleFunc("GET /{shortCode}", s.handlerRedirect)
-	mux.Handle("GET /metrics", promhttp.Handler())
 	mux.HandleFunc("POST /admin/shutdown", s.handlerShutdown)
 
+	mux.Handle("GET /metrics", promhttp.Handler())
+	mux.Handle("GET /debug/pprof/", s.authMiddleware(http.HandlerFunc(pprof.Index)))
+	mux.Handle("GET /debug/pprof/profile", s.authMiddleware(http.HandlerFunc(pprof.Profile)))
 	return s
 }
 
@@ -73,6 +79,8 @@ func (s *server) shutdown(ctx context.Context) error {
 }
 
 func (s *server) handlerShutdown(w http.ResponseWriter, r *http.Request) {
+	_, span := tracer.Start(r.Context(), "handler.shutdown")
+	defer span.End()
 	if os.Getenv("ENV") == "production" {
 		http.NotFound(w, r)
 		return

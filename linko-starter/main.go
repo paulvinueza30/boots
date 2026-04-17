@@ -26,6 +26,7 @@ func main() {
 
 func run(ctx context.Context, cancel context.CancelFunc, httpPort int, dataDir string) int {
 	logPath := os.Getenv("LINKO_LOG_FILE")
+	initTracing(ctx)
 	logger, closeFn, err := initLogger(logPath)
 	defer closeLogger(closeFn)
 	if err != nil {

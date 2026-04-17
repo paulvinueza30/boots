@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -8,14 +9,23 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"time"
 
 	"boot.dev/linko/internal/build"
 	"boot.dev/linko/internal/linkoerr"
 	"github.com/lmittmann/tint"
 	"github.com/mattn/go-isatty"
 	pkgerr "github.com/pkg/errors"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/sdk/resource"
+	"go.opentelemetry.io/otel/trace"
+
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
+
+var tracer trace.Tracer
 
 type closeFunc func() error
 
@@ -131,4 +141,22 @@ func errorAttr(me multiError) []slog.Attr {
 		errAttrs = append(errAttrs, slog.GroupAttrs(fmt.Sprintf("error_%d", i+1), attrs...))
 	}
 	return errAttrs
+}
+
+func initTracing(ctx context.Context) (func(context.Context) error, error) {
+	exp, err := otlptracegrpc.New(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithBatcher(exp,
+			sdktrace.WithBatchTimeout(2*time.Second),
+		),
+		sdktrace.WithResource(resource.Default()),
+	)
+
+	otel.SetTracerProvider(tp)
+	tracer = tp.Tracer("boot.dev/link")
+	return tp.Shutdown, nil
 }

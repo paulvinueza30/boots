@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"boot.dev/linko/internal/store"
+	_ "go.opentelemetry.io/otel/trace"
 	"golang.org/x/crypto/bcrypt"
 
 	pkgerr "github.com/pkg/errors"
@@ -29,15 +30,21 @@ var (
 var indexPage string
 
 func (s *server) handlerIndex(w http.ResponseWriter, r *http.Request) {
+	_, span := tracer.Start(r.Context(), "handler.index")
+	defer span.End()
 	w.Header().Set("Content-Type", "text/html")
 	io.WriteString(w, indexPage)
 }
 
 func (s *server) handlerLogin(w http.ResponseWriter, r *http.Request) {
+	_, span := tracer.Start(r.Context(), "handler.login")
+	defer span.End()
 	w.WriteHeader(http.StatusOK)
 }
 
 func (s *server) handlerShortenLink(w http.ResponseWriter, r *http.Request) {
+	_, span := tracer.Start(r.Context(), "handler.shorten_link")
+	defer span.End()
 	user, ok := r.Context().Value(UserContextKey).(string)
 	if !ok || user == "" {
 		httpError(r.Context(), w, http.StatusUnauthorized, pkgerr.New("unauthorized"))
@@ -53,7 +60,7 @@ func (s *server) handlerShortenLink(w http.ResponseWriter, r *http.Request) {
 		httpError(r.Context(), w, http.StatusBadRequest, pkgerr.New("invalid URL: must include scheme (http/https) and host"))
 		return
 	}
-	if err := checkDestination(longURL); err != nil {
+	if err := checkDestination(r.Context(), longURL); err != nil {
 		httpError(r.Context(), w, http.StatusBadRequest, pkgerr.Wrap(err, "invalid target URL"))
 		return
 	}
@@ -69,6 +76,8 @@ func (s *server) handlerShortenLink(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handlerRedirect(w http.ResponseWriter, r *http.Request) {
+	_, span := tracer.Start(r.Context(), "handler.redirect")
+	defer span.End()
 	longURL, err := s.store.Lookup(r.Context(), r.PathValue("shortCode"))
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
@@ -80,7 +89,7 @@ func (s *server) handlerRedirect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, _ = bcrypt.GenerateFromPassword([]byte(longURL), bcrypt.DefaultCost)
-	if err := checkDestination(longURL); err != nil {
+	if err := checkDestination(r.Context(), longURL); err != nil {
 		httpError(r.Context(), w, http.StatusBadGateway, fmt.Errorf("destination unavailable %v", err))
 		return
 	}
@@ -93,6 +102,8 @@ func (s *server) handlerRedirect(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handlerListURLs(w http.ResponseWriter, r *http.Request) {
+	_, span := tracer.Start(r.Context(), "handler.list_urls")
+	defer span.End()
 	codes, err := s.store.List(r.Context())
 	if err != nil {
 		s.logger.Error("failed to list URLs", slog.Any("error", err))
@@ -104,7 +115,9 @@ func (s *server) handlerListURLs(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(codes)
 }
 
-func (s *server) handlerStats(w http.ResponseWriter, _ *http.Request) {
+func (s *server) handlerStats(w http.ResponseWriter, r *http.Request) {
+	_, span := tracer.Start(r.Context(), "handler.stats")
+	defer span.End()
 	redirectsMu.Lock()
 	snapshot := redirects
 	redirectsMu.Unlock()

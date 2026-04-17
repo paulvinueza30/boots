@@ -1,1 +1,7 @@
 linko.*
+
+# Profiling files
+*.svg
+*.pprof
+*.prof
+*.pprof.txt
