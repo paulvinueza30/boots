@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+  labels:
+    app: synergychat-crawler
+  name: synergychat-crawler
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: synergychat-crawler
+  template:
+    metadata:
+      labels:
+        app: synergychat-crawler
+    spec:
+      containers:
+        - name: synergychat-crawler
+          image: docker.io/bootdotdev/synergychat-crawler:latest
+          envFrom:
+            - configMapRef:
+                name: synergychat-crawler-configmap
