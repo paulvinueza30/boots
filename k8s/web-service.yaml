@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-service
+  namespace: default
+spec:
+  selector:
+    app: synergychat-web
+  type:
+  ports:
+    - name: web-service
+      protocol: TCP
+      port: 80
+      targetPort: 8080
+---

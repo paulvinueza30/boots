@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: crawler-service
+  namespace: default
+spec:
+  selector:
+    app: synergychat-crawler
+  type:
+  ports:
+    - name: crawler-servicler-servicee
+      protocol: TCP
+      port: 80
+      targetPort: 8080
+---
