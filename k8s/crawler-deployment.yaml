@@ -6,6 +6,7 @@ metadata:
   labels:
     app: synergychat-crawler
   name: synergychat-crawler
+  namespace: crawler
 spec:
   replicas: 1
   selector:
@@ -17,8 +18,48 @@ spec:
         app: synergychat-crawler
     spec:
       containers:
-        - name: synergychat-crawler
+        - name: synergychat-crawler-1
           image: docker.io/bootdotdev/synergychat-crawler:latest
           envFrom:
             - configMapRef:
                 name: synergychat-crawler-configmap
+          env:
+            - name: CRAWLER_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: synergychat-crawler-configmap
+                  key: CRAWLER_PORT
+          volumeMounts:
+            - name: cache-volume
+              mountPath: /cache
+        - name: synergychat-crawler-2
+          image: docker.io/bootdotdev/synergychat-crawler:latest
+          envFrom:
+            - configMapRef:
+                name: synergychat-crawler-configmap
+          env:
+            - name: CRAWLER_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: synergychat-crawler-configmap
+                  key: CRAWLER_PORT_2
+          volumeMounts:
+            - name: cache-volume
+              mountPath: /cache
+        - name: synergychat-crawler-3
+          image: docker.io/bootdotdev/synergychat-crawler:latest
+          envFrom:
+            - configMapRef:
+                name: synergychat-crawler-configmap
+          env:
+            - name: CRAWLER_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: synergychat-crawler-configmap
+                  key: CRAWLER_PORT_3
+          volumeMounts:
+            - name: cache-volume
+              mountPath: /cache
+      volumes:
+        - name: cache-volume
+          emptyDir: {}

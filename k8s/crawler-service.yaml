@@ -2,7 +2,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: crawler-service
-  namespace: default
+  namespace: crawler
 spec:
   selector:
     app: synergychat-crawler
